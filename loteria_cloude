@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LotoStat CR - Análisis Avanzado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #10B981;
+            --secondary: #3B82F6;
+            --accent: #F59E0B;
+            --dark: #1F2937;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: #F3F4F6; }
+        .lotto-ball {
+            width: 32px; height: 32px;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: bold; color: white;
+            box-shadow: inset -2px -2px 5px rgba(0,0,0,0.2), 2px 2px 4px rgba(0,0,0,0.2);
+            font-size: 0.85rem;
+        }
+        .tab-active { border-bottom: 3px solid var(--primary); color: var(--primary); font-weight: bold; }
+        .fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .heatmap-cell { transition: all 0.2s; cursor: pointer; }
+        .heatmap-cell:hover { transform: scale(1.1); z-index: 10; border: 2px solid white; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- Navbar -->
+    <nav class="bg-gray-900 text-white shadow-lg sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-dice text-yellow-400 text-2xl"></i>
+                    <span class="font-bold text-xl tracking-tight">Loto<span class="text-green-400">Stat</span> CR</span>
+                </div>
+                <div class="hidden md:flex space-x-6 text-sm font-medium">
+                    <button onclick="switchTab('dashboard')" class="hover:text-green-400 transition">Dashboard</button>
+                    <button onclick="switchTab('resultados')" class="hover:text-green-400 transition">Resultados</button>
+                    <button onclick="switchTab('mis-numeros')" class="hover:text-green-400 transition">Mis Números</button>
+                    <button onclick="switchTab('patrones')" class="hover:text-green-400 transition">Patrones & IA</button>
+                </div>
+                <div class="md:hidden">
+                    <button class="text-gray-300 hover:text-white"><i class="fas fa-bars text-xl"></i></button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 py-6 min-h-screen">
+        
+        <!-- TAB: DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content fade-in">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <!-- Card 1 -->
+                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-green-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Sorteo más reciente</p>
+                            <h3 class="text-2xl font-bold mt-1">04 Abr 2026</h3>
+                        </div>
+                        <span class="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full">Día</span>
+                    </div>
+                    <div class="mt-4 flex space-x-2">
+                        <div class="lotto-ball bg-blue-600">55</div>
+                        <div class="lotto-ball bg-blue-600">55</div>
+                        <div class="lotto-ball bg-red-600">14</div>
+                    </div>
+                </div>
+                <!-- Card 2 -->
+                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-yellow-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Número "Caliente"</p>
+                            <h3 class="text-2xl font-bold mt-1">23</h3>
+                        </div>
+                        <i class="fas fa-fire text-yellow-500 text-2xl"></i>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">Apareció 14 veces en el último trimestre.</p>
+                </div>
+                <!-- Card 3 -->
+                <div class="bg-white rounded-xl shadow-sm p-6 border-l-4 border-blue-500">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-xs text-gray-500 uppercase font-semibold">Número "Atrasado"</p>
+                            <h3 class="text-2xl font-bold mt-1">87</h3>
+                        </div>
+                        <i class="fas fa-hourglass-end text-blue-500 text-2xl"></i>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-2">45 días sin salir en Chances.</p>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-sm p-6 mb-8">
+                <h3 class="text-lg font-bold mb-4 flex items-center"><i class="fas fa-chart-line mr-2 text-green-500"></i> Frecuencia Mensual (Top 10)</h3>
+                <canvas id="frequencyChart" height="100"></canvas>
+            </div>
+        </div>
+
+        <!-- TAB: RESULTADOS -->
+        <div id="tab-resultados" class="tab-content hidden fade-in">
+            <!-- Filtros -->
+            <div class="bg-white rounded-xl shadow-sm p-4 mb-6 flex flex-wrap gap-4 items-end">
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Año</label>
+                    <select class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                        <option>2026</option><option>2025</option><option>2024</option>
+                    </select>
+                </div>
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Mes</label>
+                    <select class="w-full border rounded px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 outline-none">
+                        <option>Todo</option><option>Abril</option><option>Marzo</option>
+                    </select>
+                </div>
+                <div class="w-full md:w-auto">
+                    <label class="block text-xs font-semibold text-gray-500 mb-1">Juego</label>
+                    <div class="flex gap-2">
+                        <button class="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg text-sm font-bold border border-blue-200">Chances</button>
+                        <button class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg text-sm font-bold hover:bg-gray-200">Lotería</button>
+                    </div>
+                </div>
+                <button class="w-full md:w-auto bg-gray-900 text-white px-6 py-2 rounded-lg text-sm font-bold hover:bg-gray-800">
+                    <i class="fas fa-search mr-1"></i> Buscar
+                </button>
+            </div>
+
+            <!-- Tabla -->
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden">
+                <table class="w-full text-sm text-left">
+                    <thead class="bg-gray-50 text-gray-600 font-semibold border-b">
+                        <tr>
+                            <th class="px-6 py-3">Fecha</th>
+                            <th class="px-6 py-3 text-center">Día</th>
+                            <th class="px-6 py-3 text-center">Tarde</th>
+                            <th class="px-6 py-3 text-center">Noche</th>
+                            <th class="px-6 py-3">Serie</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y">
+                        <tr class="hover:bg-blue-50 transition">
+                            <td class="px-6 py-4 font-medium text-gray-800">Abr 03 (Jueves)</td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-green-600 mx-auto">30</span></td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-green-600 mx-auto">79</span></td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-red-600 mx-auto">85</span></td>
+                            <td class="px-6 py-4"><span class="bg-gray-200 px-2 py-1 rounded text-xs font-bold">53</span></td>
+                        </tr>
+                        <tr class="hover:bg-blue-50 transition">
+                            <td class="px-6 py-4 font-medium text-gray-800">Abr 02 (Miércoles)</td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-yellow-500 mx-auto">63</span></td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-yellow-500 mx-auto">31</span></td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-yellow-500 mx-auto">*04</span></td>
+                            <td class="px-6 py-4"><span class="bg-gray-200 px-2 py-1 rounded text-xs font-bold">46</span></td>
+                        </tr>
+                         <tr class="hover:bg-blue-50 transition">
+                            <td class="px-6 py-4 font-medium text-gray-800">Abr 01 (Martes)</td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-blue-600 mx-auto">59</span></td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-blue-600 mx-auto">74</span></td>
+                            <td class="px-6 py-4 text-center"><span class="lotto-ball bg-red-600 mx-auto">16</span></td>
+                            <td class="px-6 py-4"><span class="bg-gray-200 px-2 py-1 rounded text-xs font-bold">88</span></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: MIS NÚMEROS -->
+        <div id="tab-mis-numeros" class="tab-content hidden fade-in">
+            <div class="flex flex-col md:flex-row gap-6">
+                <!-- Input Panel -->
+                <div class="w-full md:w-1/3">
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h3 class="text-lg font-bold mb-4">Agregar Número</h3>
+                        <div class="flex space-x-2 mb-4">
+                            <input type="number" id="inputNumero" placeholder="00-99" class="flex-1 border rounded px-3 py-2 focus:ring-2 focus:ring-green-500 outline-none" max="99" min="0">
+                            <button onclick="agregarNumero()" class="bg-green-600 text-white px-4 py-2 rounded font-bold hover:bg-green-700"><i class="fas fa-plus"></i></button>
+                        </div>
+                        <div id="lista-numeros" class="flex flex-wrap gap-2">
+                            <!-- Tags injected via JS -->
+                            <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold cursor-pointer hover:bg-green-200" onclick="eliminarNumero(this)">23 <i class="fas fa-times ml-1 text-xs"></i></span>
+                            <span class="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold cursor-pointer hover:bg-green-200" onclick="eliminarNumero(this)">87 <i class="fas fa-times ml-1 text-xs"></i></span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cards Panel -->
+                <div class="w-full md:w-2/3 grid grid-cols-1 md:grid-cols-2 gap-4" id="cards-container">
+                    <!-- Card Example 1 -->
+                    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 bg-green-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">Activo</div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-4xl font-bold text-gray-800 tracking-tighter">23</span>
+                            <div class="text-right">
+                                <p class="text-xs text-gray-500">Última salida</p>
+                                <p class="text-sm font-bold text-green-600">02 Abr 2026</p>
+                            </div>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Frecuencia (Año)</span>
+                                <span class="font-bold">14 veces</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-green-500 h-2 rounded-full" style="width: 70%"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400 mt-2">
+                                <span>Día: 4x</span>
+                                <span>Tarde: 5x</span>
+                                <span>Noche: 5x</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card Example 2 -->
+                    <div class="bg-white rounded-xl shadow-sm p-5 border border-gray-100 relative overflow-hidden">
+                        <div class="absolute top-0 right-0 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg">Atrasado</div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="text-4xl font-bold text-gray-800 tracking-tighter">87</span>
+                            <div class="text-right">
+                                <p class="text-xs text-gray-500">Última salida</p>
+                                <p class="text-sm font-bold text-yellow-600">12 Dic 2025</p>
+                            </div>
+                        </div>
+                        <div class="space-y-3">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-600">Frecuencia (Año)</span>
+                                <span class="font-bold">2 veces</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div class="bg-yellow-500 h-2 rounded-full" style="width: 15%"></div>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-400 mt-2">
+                                <span>Día: 0x</span>
+                                <span>Tarde: 1x</span>
+                                <span>Noche: 1x</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: PATRONES & IA -->
+        <div id="tab-patrones" class="tab-content hidden fade-in">
+            <div class="bg-gradient-to-r from-gray-800 to-gray-900 rounded-xl shadow-lg p-8 text-white mb-8">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-2xl font-bold"><i class="fas fa-brain text-purple-400 mr-3"></i>Análisis de Coincidencias</h2>
+                </div>
+                <p class="text-gray-300 mb-6">Selecciona 2 o más números para ver qué tan seguido han salido juntos en la historia.</p>
+                
+                <div class="flex flex-wrap gap-3 mb-4">
+                    <input type="number" placeholder="Nº 1" class="w-20 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400">
+                    <input type="number" placeholder="Nº 2" class="w-20 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400">
+                    <input type="number" placeholder="Nº 3" class="w-20 bg-gray-700 border border-gray-600 rounded px-3 py-2 text-white placeholder-gray-400 focus:outline-none focus:border-purple-400">
+                    <button class="bg-purple-600 hover:bg-purple-500 px-6 py-2 rounded font-bold transition">Analizar</button>
+                </div>
+                
+                <div class="bg-gray-800 bg-opacity-50 rounded-lg p-4 border border-gray-700">
+                    <p class="text-sm text-gray-400 italic">Esperando selección de números...</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="text-lg font-bold mb-4">Mapa de Calor (Día vs Número)</h3>
+                    <div class="overflow-x-auto">
+                        <div class="flex gap-1 min-w-[600px]">
+                            <!-- Y Axis -->
+                            <div class="flex flex-col justify-around text-xs text-gray-500 pr-2">
+                                <span>00</span><span>10</span><span>20</span><span>30</span><span>40</span><span>50</span><span>60</span><span>70</span><span>80</span><span>90</span>
+                            </div>
+                            <!-- Heatmap Grid -->
+                            <div class="grid grid-rows-10 grid-cols-5 gap-0.5 w-full h-64">
+                                <!-- Simulated cells -->
+                                <div class="bg-green-100 heatmap-cell" title="Alta frecuencia"></div>
+                                <div class="bg-green-300 heatmap-cell"></div>
+                                <div class="bg-green-50 heatmap-cell"></div>
+                                <div class="bg-red-200 heatmap-cell"></div>
+                                <div class="bg-green-200 heatmap-cell"></div>
+                                <!-- ... repeating for demo ... -->
+                                <div class="bg-green-500 heatmap-cell col-span-1 row-span-1"></div>
+                                <div class="bg-green-100 heatmap-cell"></div>
+                                <div class="bg-green-50 heatmap-cell"></div>
+                                <div class="bg-green-200 heatmap-cell"></div>
+                                <div class="bg-green-300 heatmap-cell"></div>
+                                
+                                <!-- Filler for demo visualization -->
+                                <div class="bg-green-50 heatmap-cell"></div>
+                                <div class="bg-green-200 heatmap-cell"></div>
+                                <div class="bg-green-100 heatmap-cell"></div>
+                                <div class="bg-green-500 heatmap-cell"></div>
+                                <div class="bg-green-50 heatmap-cell"></div>
+                                
+                                <div class="bg-green-300 heatmap-cell"></div>
+                                <div class="bg-green-50 heatmap-cell"></div>
+                                <div class="bg-green-100 heatmap-cell"></div>
+                                <div class="bg-green-200 heatmap-cell"></div>
+                                <div class="bg-green-50 heatmap-cell"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex justify-end mt-2 text-xs text-gray-500">
+                        <span class="mr-2">Bajo</span>
+                        <div class="w-32 h-3 bg-gradient-to-r from-green-50 via-green-200 to-green-500 rounded"></div>
+                        <span class="ml-2">Alto</span>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm p-6">
+                    <h3 class="text-lg font-bold mb-4">Series Frecuentes</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-700">Serie 53</span>
+                                <span class="text-sm font-medium text-green-600">18 salidas</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-600 h-2.5 rounded-full" style="width: 85%"></div>
+                            </div>
+                        </div>
+                        <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-700">Serie 19</span>
+                                <span class="text-sm font-medium text-green-600">15 salidas</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-500 h-2.5 rounded-full" style="width: 70%"></div>
+                            </div>
+                        </div>
+                         <div>
+                            <div class="flex justify-between mb-1">
+                                <span class="text-sm font-medium text-gray-700">Serie 88</span>
+                                <span class="text-sm font-medium text-green-600">12 salidas</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2.5">
+                                <div class="bg-blue-400 h-2.5 rounded-full" style="width: 60%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-900 text-gray-400 py-8 mt-8">
+        <div class="max-w-7xl mx-auto px-4 text-center">
+            <p class="text-sm">© 2026 LotoStat CR. Todos los derechos reservados.</p>
+            <p class="text-xs mt-2 text-gray-600">Estadísticas basadas en datos históricos. No garantizan resultados futuros. Juegue con responsabilidad.</p>
+        </div>
+    </footer>
+
+    <script>
+        // --- Lógica de Tabs ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-' + tabId).classList.remove('hidden');
+            // Actualizar estilo de botones en navbar si fuera necesario
+        }
+
+        // --- Lógica de Mis Números ---
+        const numerosList = document.getElementById('lista-numeros');
+
+        function agregarNumero() {
+            const input = document.getElementById('inputNumero');
+            let val = input.value;
+            if(val !== "") {
+                // Validación simple
+                if(val < 0) val = 0; 
+                if(val > 99) val = 99;
+                const numStr = String(val).padStart(2, '0');
+
+                const span = document.createElement('span');
+                span.className = 'bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-bold cursor-pointer hover:bg-green-200 animate-pulse';
+                span.innerHTML = `${numStr} <i class="fas fa-times ml-1 text-xs"></i>`;
+                span.onclick = function() { this.remove() };
+                
+                numerosList.appendChild(span);
+                input.value = '';
+                setTimeout(() => span.classList.remove('animate-pulse'), 500);
+            }
+        }
+
+        function eliminarNumero(el) {
+            el.remove();
+        }
+
+        // --- Chart.js Initialization ---
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('frequencyChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['23', '04', '87', '12', '55', '90', '31', '63', '49', '01'],
+                    datasets: [{
+                        label: 'Frecuencia 2026',
+                        data: [14, 12, 11, 10, 9, 9, 8, 8, 7, 7],
+                        backgroundColor: 'rgba(16, 185, 129, 0.6)',
+                        borderColor: 'rgba(16, 185, 129, 1)',
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>
